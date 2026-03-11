@@ -1,4 +1,5 @@
 using ActionCombat.Core.StateMachine;
+using ActionCombat.Combat;
 using UnityEngine;
 
 namespace ActionCombat.Player.States
@@ -10,15 +11,22 @@ namespace ActionCombat.Player.States
         private bool comboQueued;
         private float stepTimer;
         private float currentStepDuration;
+        private bool hitboxActivated;
 
         private readonly float[] stepDurations = { 0.4f, 0.35f, 0.5f };
+        private readonly float[] stepDamage = { 10f, 12f, 18f };
         private readonly int maxComboSteps = 3;
+
+        private HitboxController hitbox;
 
         public bool IsComplete { get; private set; }
         public int CurrentComboStep => comboStep;
 
         public LightAttackState(StateMachine stateMachine, PlayerController player)
-            : base("LightAttack", stateMachine, player) { }
+            : base("LightAttack", stateMachine, player)
+        {
+            hitbox = player.GetComponentInChildren<HitboxController>();
+        }
 
         public override void Enter()
         {
@@ -35,7 +43,22 @@ namespace ActionCombat.Player.States
             stepTimer += Time.deltaTime;
             float normalisedTime = stepTimer / currentStepDuration;
 
-            // Combo window: 50% to 85% of current step
+            // Hitbox active frames: 20% to 45% of step
+            if (normalisedTime >= 0.2f && normalisedTime < 0.45f)
+            {
+                if (!hitboxActivated)
+                {
+                    hitboxActivated = true;
+                    if (hitbox != null) hitbox.Activate();
+                }
+            }
+            else if (normalisedTime >= 0.45f && hitboxActivated)
+            {
+                hitboxActivated = false;
+                if (hitbox != null) hitbox.Deactivate();
+            }
+
+            // Combo window: 50% to 85%
             if (normalisedTime >= 0.5f && normalisedTime < 0.85f)
             {
                 if (!comboWindowOpen)
@@ -56,6 +79,10 @@ namespace ActionCombat.Player.States
             // Step complete
             if (normalisedTime >= 1f)
             {
+                // Make sure hitbox is off
+                if (hitbox != null) hitbox.Deactivate();
+                hitboxActivated = false;
+
                 if (comboQueued && comboStep < maxComboSteps - 1)
                 {
                     comboStep++;
@@ -67,7 +94,7 @@ namespace ActionCombat.Player.States
                 }
             }
 
-            // Forward lunge during first 40% of step
+            // Forward lunge
             if (normalisedTime < 0.4f)
             {
                 Vector3 forward = player.transform.forward * 2f * Time.deltaTime;
@@ -80,18 +107,22 @@ namespace ActionCombat.Player.States
             stepTimer = 0f;
             comboQueued = false;
             comboWindowOpen = false;
+            hitboxActivated = false;
             currentStepDuration = stepDurations[comboStep];
             animator.PlayAnimation($"LightAttack{comboStep + 1}", 0.05f);
 
-            UnityEngine.Debug.Log($"[Combat] Light Attack Step {comboStep + 1}/{maxComboSteps}");
+            UnityEngine.Debug.Log($"[Combat] Light Attack Step {comboStep + 1}/{maxComboSteps} " +
+                $"| Damage: {stepDamage[comboStep]}");
         }
 
         public override void Exit()
         {
             base.Exit();
+            if (hitbox != null) hitbox.Deactivate();
             comboStep = 0;
             comboQueued = false;
             comboWindowOpen = false;
+            hitboxActivated = false;
         }
     }
 }
