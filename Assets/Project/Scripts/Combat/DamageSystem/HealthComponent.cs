@@ -63,6 +63,7 @@ namespace ActionCombat.Combat
             OnHealthChanged?.Invoke(currentHealth, maxHealth);
             OnDamaged?.Invoke(damage);
 
+
             if (currentHealth <= 0f)
             {
                 Die();
